@@ -1,1 +1,1 @@
-Live link: https://iambored456.github.io/OKLCH-Visualizer-Attempt-Lets-Rock/
+Live link: https://iambored456.github.io/OKLCH-Equidistant-Palette-Generator/
