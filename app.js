@@ -26,6 +26,15 @@ const threeDInstructions = document.getElementById('3d-instructions');
 const sweetSpotValueInput = document.getElementById('sweet-spot-value-input');
 const lcGraphCanvas = document.getElementById('lc-graph-canvas');
 const findMaxSweetSpotBtn = document.getElementById('find-max-sweet-spot-btn');
+const paletteTableBody = document.getElementById('palette-table-body');
+const flipPaletteCheckbox = document.getElementById('flip-palette-checkbox');
+const spiralModeCheckbox = document.getElementById('spiral-mode-checkbox');
+const spiralColorCountInput = document.getElementById('spiral-color-count');
+const spiralLMinInput = document.getElementById('spiral-lmin-input');
+const spiralLMaxInput = document.getElementById('spiral-lmax-input');
+const hueTurnsInput = document.getElementById('hue-turns-input');
+const spiralPerHueEdgeCheckbox = document.getElementById('spiral-per-hue-edge-checkbox');
+const applyPitchMappingBtn = document.getElementById('apply-pitch-mapping-btn');
 
 
 // App State
@@ -36,6 +45,16 @@ let currentPalette = [];
 let startHue = 0;
 
 const oklchConverter = culori.converter('oklab');
+const pitchLabels = [
+    'A0','A#0','B0','C1','C#1','D1','D#1','E1','F1','F#1','G1','G#1',
+    'A1','A#1','B1','C2','C#2','D2','D#2','E2','F2','F#2','G2','G#2',
+    'A2','A#2','B2','C3','C#3','D3','D#3','E3','F3','F#3','G3','G#3',
+    'A3','A#3','B3','C4','C#4','D4','D#4','E4','F4','F#4','G4','G#4',
+    'A4','A#4','B4','C5','C#5','D5','D#5','E5','F5','F#5','G5','G#5',
+    'A5','A#5','B5','C6','C#6','D6','D#6','E6','F6','F#6','G6','G#6',
+    'A6','A#6','B6','C7','C#7','D7','D#7','E7','F7','F#7','G7','G#7',
+    'A7','A#7','B7','C8'
+];
 
 function init3D() {
     const containerWidth = threeDContainer.clientWidth;
@@ -228,55 +247,145 @@ function drawLCGraph(l, c) {
 }
 
 function updateApp() {
+    const spiralEnabled = spiralModeCheckbox && spiralModeCheckbox.checked;
     let l, c;
-    const count = parseInt(colorCountInput.value, 10);
+    let count = parseInt(colorCountInput.value, 10);
+    const clampCount = (value, element) => {
+        let result = value;
+        if (element) {
+            const min = parseInt(element.min, 10);
+            const max = parseInt(element.max, 10);
+            if (!isNaN(min)) result = Math.max(min, result);
+            if (!isNaN(max)) result = Math.min(max, result);
+        }
+        return result;
+    };
+    if (spiralEnabled && spiralColorCountInput) {
+        const spiralCount = parseInt(spiralColorCountInput.value, 10);
+        if (!isNaN(spiralCount)) count = clampCount(spiralCount, spiralColorCountInput);
+    }
+    count = clampCount(count, colorCountInput);
+    count = Math.max(1, isNaN(count) ? 1 : count);
 
-    if (lockToEdgeCheckbox.checked) {
-        const index = parseInt(sweetSpotSlider.value, 10);
-        const point = sweetSpotPath[index];
-        if (point) {
-            l = point.l;
-            c = point.c;
-            lightnessSlider.value = l;
-            chromaSlider.value = c;
+    currentPalette = [];
+
+    if (spiralEnabled) {
+        const rawLMin = parseFloat(spiralLMinInput.value);
+        const rawLMax = parseFloat(spiralLMaxInput.value);
+        const lMin = Math.max(0, Math.min(1, isNaN(rawLMin) ? 0 : rawLMin));
+        const lMax = Math.max(0, Math.min(1, isNaN(rawLMax) ? 1 : rawLMax));
+        const turns = parseFloat(hueTurnsInput.value);
+        const turnsValue = isNaN(turns) ? 1 : turns;
+        const perHueEdge = spiralPerHueEdgeCheckbox && spiralPerHueEdgeCheckbox.checked;
+
+        // Spiral mode: per-index L/H and optional per-hue chroma edge.
+        for (let i = 0; i < count; i++) {
+            const t = count === 1 ? 0 : i / (count - 1);
+            const l_i = lMin + (lMax - lMin) * t;
+            const hUnwrapped = startHue + turnsValue * 360 * t;
+            const h_i = ((hUnwrapped % 360) + 360) % 360;
+            const c_i = perHueEdge ? findMaxChromaForLAndH(l_i, h_i) : getSafeChromaForL(l_i);
+            const colorOKLCH = { mode: 'oklch', l: l_i, c: c_i, h: h_i };
+            currentPalette.push({
+                index: i,
+                oklch: colorOKLCH,
+                hex: culori.formatHex(colorOKLCH),
+                inGamut: culori.displayable(colorOKLCH)
+            });
+        }
+
+        // Use the midpoint as a representative for the LC graph and gradient.
+        const midT = 0.5;
+        l = lMin + (lMax - lMin) * midT;
+        const midHUnwrapped = startHue + turnsValue * 360 * midT;
+        const midH = ((midHUnwrapped % 360) + 360) % 360;
+        c = perHueEdge ? findMaxChromaForLAndH(l, midH) : getSafeChromaForL(l);
+    } else {
+        if (lockToEdgeCheckbox.checked) {
+            const index = parseInt(sweetSpotSlider.value, 10);
+            const point = sweetSpotPath[index];
+            if (point) {
+                l = point.l;
+                c = point.c;
+                lightnessSlider.value = l;
+                chromaSlider.value = c;
+            } else {
+                l = parseFloat(lightnessSlider.value);
+                c = parseFloat(chromaSlider.value);
+            }
+            const normalizedValue = sweetSpotSlider.value / (sweetSpotSlider.max || 1);
+            if (document.activeElement !== sweetSpotValueInput) {
+                 sweetSpotValueInput.value = normalizedValue.toFixed(3);
+            }
         } else {
             l = parseFloat(lightnessSlider.value);
             c = parseFloat(chromaSlider.value);
         }
-        const normalizedValue = sweetSpotSlider.value / (sweetSpotSlider.max || 1);
-        if (document.activeElement !== sweetSpotValueInput) {
-             sweetSpotValueInput.value = normalizedValue.toFixed(3);
+        
+        const hueStep = 360 / count;
+        for (let i = 0; i < count; i++) {
+            const h = (startHue + i * hueStep) % 360;
+            currentPalette.push({ index: i, oklch: { mode: 'oklch', l, c, h }, hex: culori.formatHex({ mode: 'oklch', l, c, h }), inGamut: culori.displayable({ mode: 'oklch', l, c, h }) });
         }
-    } else {
-        l = parseFloat(lightnessSlider.value);
-        c = parseFloat(chromaSlider.value);
     }
     
-    if (document.activeElement !== lightnessValueInput) lightnessValueInput.value = l.toFixed(3);
-    if (document.activeElement !== chromaValueInput) chromaValueInput.value = c.toFixed(3);
+    if (document.activeElement !== lightnessValueInput) lightnessValueInput.value = (l ?? 0).toFixed(3);
+    if (document.activeElement !== chromaValueInput) chromaValueInput.value = (c ?? 0).toFixed(3);
     
-    currentPalette = [];
-    const hueStep = 360 / count;
-    for (let i = 0; i < count; i++) {
-        const h = (startHue + i * hueStep) % 360;
-        currentPalette.push({ oklch: { mode: 'oklch', l, c, h }, hex: culori.formatHex({ mode: 'oklch', l, c, h }), inGamut: culori.displayable({ mode: 'oklch', l, c, h }) });
-    }
-    
-    drawLCGraph(l, c);
+    drawLCGraph(l || 0, c || 0);
     renderPaletteSwatches();
-    drawHueGradient(l, c);
+    renderPaletteTable();
+    drawHueGradient(l || 0, c || 0);
     update3DVisualization();
 }
 
 function renderPaletteSwatches() {
     paletteContainer.innerHTML = '';
-    currentPalette.forEach(color => {
+    const displayPalette = flipPaletteCheckbox && flipPaletteCheckbox.checked ? [...currentPalette].reverse() : currentPalette;
+    displayPalette.forEach(color => {
         const swatch = document.createElement('div');
         swatch.className = 'color-swatch';
         swatch.style.backgroundColor = color.inGamut ? color.hex : '#555';
         swatch.innerHTML = `<span>${color.hex}</span>`;
         if (!color.inGamut) swatch.classList.add('out-of-gamut');
         paletteContainer.appendChild(swatch);
+    });
+}
+
+function renderPaletteTable() {
+    if (!paletteTableBody) return;
+    paletteTableBody.innerHTML = '';
+    let sorted = [...currentPalette].sort((a, b) => b.oklch.l - a.oklch.l);
+    if (flipPaletteCheckbox && flipPaletteCheckbox.checked) sorted = sorted.reverse();
+    sorted.forEach(color => {
+        const row = document.createElement('tr');
+
+        const colorCell = document.createElement('td');
+        const swatch = document.createElement('div');
+        swatch.className = 'table-swatch';
+        swatch.style.backgroundColor = color.inGamut ? color.hex : '#555';
+        swatch.style.width = '28px';
+        swatch.style.height = '28px';
+        swatch.style.borderRadius = '6px';
+        swatch.style.border = '1px solid rgba(0,0,0,0.15)';
+        colorCell.appendChild(swatch);
+
+        const pitchCell = document.createElement('td');
+        const pitch = pitchLabels[color.index] ?? `#${color.index + 1}`;
+        pitchCell.textContent = pitch;
+
+        const hexCell = document.createElement('td');
+        hexCell.textContent = color.hex;
+
+        const oklchCell = document.createElement('td');
+        const { l, c, h } = color.oklch;
+        oklchCell.textContent = `L ${l.toFixed(3)}, C ${c.toFixed(3)}, H ${h.toFixed(1)}`;
+
+        row.appendChild(colorCell);
+        row.appendChild(pitchCell);
+        row.appendChild(hexCell);
+        row.appendChild(oklchCell);
+        paletteTableBody.appendChild(row);
     });
 }
 
@@ -312,6 +421,37 @@ function findMaxSafeChromaForL(l) {
     return 0;
 }
 
+// Interpolates the precomputed sweet spot path to fetch a safe chroma for any lightness.
+function getSafeChromaForL(l) {
+    if (!sweetSpotPath.length) return 0;
+    const clampedL = Math.max(0, Math.min(1, l));
+    const indexFloat = clampedL * (sweetSpotPath.length - 1);
+    const i0 = Math.floor(indexFloat);
+    const i1 = Math.min(i0 + 1, sweetSpotPath.length - 1);
+    const t = indexFloat - i0;
+    const c0 = sweetSpotPath[i0].c;
+    const c1 = sweetSpotPath[i1].c;
+    return c0 + (c1 - c0) * t;
+}
+
+// Binary search for the maximum chroma that is displayable at a specific (L, H).
+// Per-hue edge checks cost extra work per color but are still fine for ~100 samples.
+function findMaxChromaForLAndH(l, h, maxC = 0.5) {
+    let low = 0;
+    let high = maxC;
+    let result = 0;
+    for (let i = 0; i < 14; i++) {
+        const mid = (low + high) / 2;
+        if (culori.displayable({ mode: 'oklch', l, c: mid, h })) {
+            result = mid;
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    return result;
+}
+
 function findMaxSafeLightnessForC(c) {
     for (let l = 0.99; l > 0.01; l -= 0.01) {
         if (isChromaSafeForAllHues(l, c)) return l;
@@ -331,8 +471,20 @@ function init() {
     precalculateSweetSpotPath();
     sweetSpotSlider.max = sweetSpotPath.length - 1;
 
-    const allControls = [lightnessSlider, chromaSlider, colorCountInput, sweetSpotSlider];
-    allControls.forEach(control => control.addEventListener('input', updateApp));
+    const allControls = [
+        lightnessSlider,
+        chromaSlider,
+        colorCountInput,
+        sweetSpotSlider,
+        spiralModeCheckbox,
+        spiralColorCountInput,
+        spiralLMinInput,
+        spiralLMaxInput,
+        hueTurnsInput,
+        spiralPerHueEdgeCheckbox,
+        flipPaletteCheckbox
+    ];
+    allControls.filter(Boolean).forEach(control => control.addEventListener('input', updateApp));
     
     hueCanvas.addEventListener('click', (event) => {
         const rect = hueCanvas.getBoundingClientRect();
@@ -410,14 +562,28 @@ function init() {
         button.addEventListener('click', (e) => {
             const slider = document.getElementById(e.target.dataset.for);
             const step = parseFloat(e.target.dataset.step);
-            slider.value = (parseFloat(slider.value) + step).toFixed(4);
+            if (!slider || isNaN(step)) return;
+            const current = parseFloat(slider.value) || 0;
+            let next = current + step;
+            if (slider.min !== '') next = Math.max(parseFloat(slider.min), next);
+            if (slider.max !== '') next = Math.min(parseFloat(slider.max), next);
+            if (slider.type === 'number' && Number.isInteger(step)) {
+                slider.value = Math.round(next);
+            } else {
+                slider.value = next.toFixed(4);
+            }
             updateApp();
         });
     });
 
+    copyHexBtn.title = 'Copies HEX plus OKLCH data';
     copyHexBtn.addEventListener('click', () => {
-        const hexCodes = currentPalette.map(color => color.hex).join('\t');
-        navigator.clipboard.writeText(hexCodes).then(() => {
+        const header = 'index\thex\tL\tC\tH';
+        const rows = currentPalette.map((color, idx) =>
+            `${idx}\t${color.hex}\t${color.oklch.l.toFixed(3)}\t${color.oklch.c.toFixed(3)}\t${color.oklch.h.toFixed(1)}`
+        );
+        const payload = [header, ...rows].join('\n');
+        navigator.clipboard.writeText(payload).then(() => {
             copyHexBtn.textContent = 'Copied!';
             setTimeout(() => { copyHexBtn.textContent = 'Copy Hex Codes'; }, 1500);
         });
@@ -448,6 +614,18 @@ function init() {
 
     toggleFullGamutCheckbox.addEventListener('change', (e) => { if (gamutMesh) gamutMesh.visible = e.target.checked; });
     toggleSafeGamutCheckbox.addEventListener('change', (e) => { if (safeGamutMesh) safeGamutMesh.visible = e.target.checked; });
+
+    if (applyPitchMappingBtn) {
+        applyPitchMappingBtn.addEventListener('click', () => {
+            if (spiralModeCheckbox) spiralModeCheckbox.checked = true;
+            if (spiralColorCountInput) spiralColorCountInput.value = 88;
+            if (hueTurnsInput) hueTurnsInput.value = 7.25; // 87 steps * 30° = 2610° ≈ 7.25 turns
+            if (spiralLMinInput) spiralLMinInput.value = spiralLMinInput.value || '0.350';
+            if (spiralLMaxInput) spiralLMaxInput.value = spiralLMaxInput.value || '0.900';
+            startHue = 270; // A0 at 270°
+            updateApp();
+        });
+    }
     
     window.addEventListener('resize', () => {
         if (!is3DInitialized || !renderer) return;

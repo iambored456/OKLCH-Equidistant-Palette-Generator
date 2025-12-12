@@ -79,7 +79,71 @@
 
             <div class="control-group">
                 <label for="color-count">Number of Colors:</label>
-                <input type="number" id="color-count" min="2" max="36" value="8">
+                <input type="number" id="color-count" min="2" max="128" value="8">
+            </div>
+
+            <div class="control-group">
+                <h3>Spiral / Pitch Mapping</h3>
+                <label class="checkbox-label" for="spiral-mode-checkbox">
+                    <input type="checkbox" id="spiral-mode-checkbox">
+                    Enable Spiral L/H Mapping
+                </label>
+
+                <div class="input-group-header">
+                    <label for="spiral-color-count">Spiral Color Count / Pitches:</label>
+                    <div class="input-with-steppers">
+                        <input type="number" id="spiral-color-count" class="value-input" min="2" max="128" value="88">
+                        <div class="stepper-buttons">
+                            <button class="stepper" data-for="spiral-color-count" data-step="1">▲</button>
+                            <button class="stepper" data-for="spiral-color-count" data-step="-1">▼</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group-header">
+                    <label for="spiral-lmin-input">L_min:</label>
+                    <div class="input-with-steppers">
+                        <input type="text" id="spiral-lmin-input" class="value-input" value="0.350">
+                        <div class="stepper-buttons">
+                            <button class="stepper" data-for="spiral-lmin-input" data-step="0.005">▲</button>
+                            <button class="stepper" data-for="spiral-lmin-input" data-step="-0.005">▼</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group-header">
+                    <label for="spiral-lmax-input">L_max:</label>
+                    <div class="input-with-steppers">
+                        <input type="text" id="spiral-lmax-input" class="value-input" value="0.900">
+                        <div class="stepper-buttons">
+                            <button class="stepper" data-for="spiral-lmax-input" data-step="0.005">▲</button>
+                            <button class="stepper" data-for="spiral-lmax-input" data-step="-0.005">▼</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group-header">
+                    <label for="hue-turns-input" title="Number of full 360° hue rotations across the palette (fractional allowed); analogous to octave steps.">Hue Turns (i.e. Octaves):</label>
+                    <div class="input-with-steppers">
+                        <input type="number" id="hue-turns-input" class="value-input" step="0.25" value="2">
+                        <div class="stepper-buttons">
+                            <button class="stepper" data-for="hue-turns-input" data-step="0.25">▲</button>
+                            <button class="stepper" data-for="hue-turns-input" data-step="-0.25">▼</button>
+                        </div>
+                    </div>
+                </div>
+
+                <label class="checkbox-label" for="spiral-per-hue-edge-checkbox">
+                    <input type="checkbox" id="spiral-per-hue-edge-checkbox">
+                    Use per-hue max chroma (slower)
+                </label>
+
+                <div class="control-group">
+                    <button id="apply-pitch-mapping-btn" class="button-secondary" title="Sets spiral to 88 pitches (A0→C8) with 30° hue steps starting at 270° (hue turns ≈ 7.25).">
+                        Apply A0 → C8 Mapping
+                    </button>
+                    <p class="info">Uses 88 pitches A0→C8 with even 30° hue steps (start at 270°, ~7.25 turns).</p>
+                </div>
             </div>
             
             <!-- Hue Gradient moved here -->
@@ -114,9 +178,27 @@
         <div class="results-panel">
             <div class="vis-box-header">
                 <h2>Generated Palette</h2>
+                <label class="checkbox-label" for="flip-palette-checkbox" title="Reverse the display order of swatches and table.">
+                    <input type="checkbox" id="flip-palette-checkbox">
+                    Flip Order
+                </label>
                 <button id="copy-hex-btn" class="button-secondary">Copy Hex Codes</button>
             </div>
             <div id="palette-container" class="palette-grid"></div>
+            <div id="palette-table-container" class="table-container">
+                <h3>Palette Table (lightest first)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Color</th>
+                            <th>Pitch</th>
+                            <th>Hex</th>
+                            <th>OKLCH (L, C, H)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="palette-table-body"></tbody>
+                </table>
+            </div>
         </div>
     </main>
     
